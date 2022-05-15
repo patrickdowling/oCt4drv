@@ -19,13 +19,14 @@ There have been other attempts to shoehorn faster processors (T3.6, or my own [o
 (\*\*) I know it’s painful because I refactored the framework twice already; the last ill-fated overhaul never made it to “production” but introduced an abstraction away from the ADC/DAC/TRx, as well as input/output labels and other fun things. It also fizzled out, because of the app rewrites necessary. Which is a shame because it would have made porting to T4.0 much easier.
 
 ## Where’s the apps?
-- Not in this repo. This is mainly a rewrite of the `o_C` hardware drivers on a Teensy 4.0, so most of the interfaces have changed.
+- Not in this repo. This is mainly a rewrite of the `o_C` hardware drivers on a Teensy 4.0, so most of the interfaces have changed. It's not "production ready" (e.g. there's no tests) nor complete. 
 - There’s new API for “processing” and “menus” (WIP).
-- I may add a proof-of-concept shim layer to be able to port existing apps.
+- I may add a proof-of-concept shim layer to be able to port existing apps (shims may also have been a better repo name ;))
 - Supporting and maintaining "all the apps" (which were written by multiple people) all in the same repo is a PITA and was never really scaleable. Similarly adding third-party or user apps becomes a mess of branches and merging.
 - If anything, it's probably easiest to port Hemispheres to the new codebase because it already has an "opinionated" API. This may be a good or bad thing :)
+- So there's really a bunch of work left to make this a "product".
 
-So if there is a plan here, it would be to keep the “core/framework” and the “apps” mostly separate. That might mean this repo would be added as a submodule somewhere, or that finally someone can make a configurable firmware builder (although with the amount of flash now, that might be moot).
+If there is a plan here, it would be to keep the “core/framework” and the “apps” mostly separate. That might mean this repo would be added as a submodule somewhere, or that finally someone can make a configurable firmware builder (although with the amount of flash now, that might be moot). 
 
 ## Driver status
 - [x] DAC8565 seems to work fine. Perhaps even better than before using hardware PCS and FIFO.
@@ -40,20 +41,24 @@ So if there is a plan here, it would be to keep the “core/framework” and the
 Most of the driver details are implemented directly and not through existing libraries, except where they're not. What can I say, I'm more interested in knowing how things work under the hood.
 
 ## Missing
-- App status storage. Here’s the one thing where T4.0 actually has a huge disadvantage: There’s very little EEPROM storage (and it’s emulated in flash). Like 1080 bytes instead of 2K. That’s enough for calibration and a few bits & bobs but not app storage, which was already full.
+- Any kind of (unit) tests.
+- Calibration.
+- App status storage. Here’s the one thing where T4.0 actually has a huge disadvantage, if not a showstopper: There’s very little EEPROM storage (and it’s emulated in flash). Like 1080 bytes instead of 2K. That’s enough for calibration and a few bits & bobs but not app storage, which was already full.
 - One option might be to use `LittleFS` but this gets deleted when uploading code... so not that helpful. There are some workarounds I have in mind but nothing ready.
 - SD card would be the obvious choice but a) T4.1 won’t fit on all boards and b) it’s not standard on T4.0 without soldering.
 
 ## To-do
-- Calibration.
 - The frequency counter hasn’t been implemented. This should work using either the `QTIMER` for capture (on all four TRx even) or possibly one of the other timers via `XBAR` (since the alternate functions don't map directly the used GPIOs).
 - Break the screen transfers into configurable chunks. This would allow running the core ISR faster (e.g. 32KHz) although there would be more tearing (and that might sacrifice ADC sample quality).
 - Evaluate ADC. I'm adding an extended debug menu for this.
 - Also there are two ADCs we can use, and there’s probably a more streamlined scan approach (`QTIMER`->`ADC_HCn`).
 - Filtering on the TRx inputs (`FILT_CNT` and `FILT_PER`).
 
-## General
+## General/Hardware
 - Given "When running at 600 MHz, Teensy 4.0 consumes approximately 100 mA current. Reducing CPU speed to 528 MHz or lower reduces power consumption." I’ve set the frequency to 480MHz. That's still 4x faster at least.
-- Builds using [platformio](https://platformio.org/). This seems to be a better compromise than the Arduino IDE, and allows for freezing the framework version so there's no need to drag along a copy of libraries. Also way easier for automated builds.
+- There's also a temperature reading, which might be interesting to observe. Too bad it can't measure the VREG...
+- While it seems like we *can* run the ADC to get 4 samples every 16.7KHz or more, that doesn't mean we should. The input conditioning will have an impact here (can be seen in practice with my [TU scope](https://github.com/patrickdowling/temps_utile-/wiki/APP:-silloscope)).
+- Builds using [platformio](https://platformio.org/). This seems to be a better compromise than the Arduino IDE, and allows for freezing the framework version so there's no need to drag along a copy of libraries (except, see next item). Also way easier for automated builds.
+- The Teensy core and other libraries are full of warnings. These are generally trivial to fix but it doesn't look like the owners are really responsive to PRs and maintaining a yet-another-fork annoying; I may still end up submitting them. In the mean time, the includes are wrapped with `#pragma` etc. to enable better warnings/errors for the rest of the code.
 - Teensy 4.0 has a cache now. This means being careful around DMA and memory ordering.
 - Using even more fancy DMA, it should actually be possible to chain the DAC/screen updates and get a more codec-like interface. I’ll leave this as an exercise for the reader.
