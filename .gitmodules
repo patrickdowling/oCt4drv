@@ -1,0 +1,3 @@
+[submodule "src/extern/weegfx"]
+	path = src/extern/weegfx
+	url = https://github.com/patrickdowling/weegfx.git

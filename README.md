@@ -1,7 +1,5 @@
 # o\_C and Teensy 4.0
 
-_NOTE: Still figuring out licensing and things. Code coming soon..._
-
 Just the drivers please, we're appless. Sans apps? Mit ohne apps?
 
 ## Allow myself to contradict... myself
@@ -24,7 +22,7 @@ There have been other attempts to shoehorn faster processors (T3.6, or my own [o
 - I may add a proof-of-concept shim layer to be able to port existing apps (shims may also have been a better repo name ;))
 - Supporting and maintaining "all the apps" (which were written by multiple people) all in the same repo is a PITA and was never really scaleable. Similarly adding third-party or user apps becomes a mess of branches and merging.
 - If anything, it's probably easiest to port Hemispheres to the new codebase because it already has an "opinionated" API. This may be a good or bad thing :)
-- So there's really a bunch of work left to make this a "product".
+- So there's really a bunch of work left to make this into anything resembling a "product".
 
 If there is a plan here, it would be to keep the “core/framework” and the “apps” mostly separate. That might mean this repo would be added as a submodule somewhere, or that finally someone can make a configurable firmware builder (although with the amount of flash now, that might be moot). 
 
@@ -49,7 +47,7 @@ Most of the driver details are implemented directly and not through existing lib
 
 ## To-do
 - The frequency counter hasn’t been implemented. This should work using either the `QTIMER` for capture (on all four TRx even) or possibly one of the other timers via `XBAR` (since the alternate functions don't map directly the used GPIOs).
-- Break the screen transfers into configurable chunks. This would allow running the core ISR faster (e.g. 32KHz) although there would be more tearing (and that might sacrifice ADC sample quality).
+- Break the screen transfers into configurable chunks. This would allow running the core ISR faster (e.g. 32KHz) although there would be more tearing (and that might sacrifice ADC sample quality). Also the platform is (IMO) simply not suited to audio.
 - Evaluate ADC. I'm adding an extended debug menu for this.
 - Also there are two ADCs we can use, and there’s probably a more streamlined scan approach (`QTIMER`->`ADC_HCn`).
 - Filtering on the TRx inputs (`FILT_CNT` and `FILT_PER`).
@@ -58,7 +56,13 @@ Most of the driver details are implemented directly and not through existing lib
 - Given "When running at 600 MHz, Teensy 4.0 consumes approximately 100 mA current. Reducing CPU speed to 528 MHz or lower reduces power consumption." I’ve set the frequency to 480MHz. That's still 4x faster at least.
 - There's also a temperature reading, which might be interesting to observe. Too bad it can't measure the VREG...
 - While it seems like we *can* run the ADC to get 4 samples every 16.7KHz or more, that doesn't mean we should. The input conditioning will have an impact here (can be seen in practice with my [TU scope](https://github.com/patrickdowling/temps_utile-/wiki/APP:-silloscope)).
-- Builds using [platformio](https://platformio.org/). This seems to be a better compromise than the Arduino IDE, and allows for freezing the framework version so there's no need to drag along a copy of libraries (except, see next item). Also way easier for automated builds.
-- The Teensy core and other libraries are full of warnings. These are generally trivial to fix but it doesn't look like the owners are really responsive to PRs and maintaining a yet-another-fork annoying; I may still end up submitting them. In the mean time, the includes are wrapped with `#pragma` etc. to enable better warnings/errors for the rest of the code.
+- Builds using [platformio](https://platformio.org/). This seems to be a better compromise than the Arduino IDE. Also way easier for automated build.
+  * In theory it allows for freezing the framework version so there's no need to drag along a copy of libraries (except, see next item).
+  * Unfortunately the brand-new platformio 6.0.0 seems to break the "build_src_flags only for project source" rule with explicit library versions :/
+  * The Teensy core and other libraries are full of warnings. These are generally trivial to fix but it doesn't look like the owners are really responsive to PRs and maintaining a yet-another-fork annoying; I may still end up submitting them.
+  * In the mean time, the includes are wrapped with `#pragma` etc. to enable better warnings/errors for the rest of the code and not specifying a specific version.
 - Teensy 4.0 has a cache now. This means being careful around DMA and memory ordering.
 - Using even more fancy DMA, it should actually be possible to chain the DAC/screen updates and get a more codec-like interface. I’ll leave this as an exercise for the reader.
+
+## License
+Yeah, after some back and forth I made it GPL. Ping me if you have a use case that requires something else.
