@@ -1,0 +1,45 @@
+name: PlatformIO CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: submodules
+      run: git submodule update --init --recursive
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v2
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+        cache: 'pip'
+        cache-dependency-path: '**/requirements.txt'
+
+    - run: |
+        pip3 install --upgrade pip
+        pip3 install -r .github/workflows/requirements.txt
+
+
+    - name: Build firmware
+      working-directory: .
+      run: |
+        pio run -e dev
+        pio run -e prod
+
+    - name: Copy artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: oct4-dev-${{github.sha}}
+        path: .pio/build/*/*.hex
