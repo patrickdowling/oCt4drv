@@ -30,6 +30,7 @@ static constexpr const char *to_string(HWTestApp::Mode mode)
   switch (mode) {
     case HWTestApp::MODE_INFO: return "INFO";
     case HWTestApp::MODE_CORE: return "CORE";
+    case HWTestApp::MODE_GFX: return "GFX";
     case HWTestApp::MODE_ADC: return "ADC";
     case HWTestApp::MODE_TRx: return "TRx";
     case HWTestApp::MODE_DEBUG: return "DEBUG";
@@ -63,26 +64,36 @@ void HWTestApp::Process(uint32_t ticks, const api::Processor::Inputs &inputs,
 void HWTestApp::HandleMenuEvent(api::MenuEvent menu_event)
 {
   switch (menu_event) {
-    case api::MENU_ACTIVATE: SystemCore::Execute(this); break;
+    case api::MENU_ACTIVATE: SystemCore::Execute(this, core_freq_); break;
     case api::MENU_DEACTIVATE: break;
   }
 }
 
 void HWTestApp::HandleEvent(const UI::Event &event)
 {
-  // DEBUG_EVENT(HWTestApp, event);
+  DEBUG_EVENT(HWTestApp, event);
   DispatchEvent(event);
 }
+
+static const uint8_t unit_khz_8[] = {0x00, 0x7c, 0x10, 0x68, 0x00, 0x7e, 0x08,
+                                     0x08, 0x7e, 0x00, 0x48, 0x68, 0x58};
 
 void HWTestApp::Draw(weegfx::Graphics &gfx) const
 {
   gfx.setPrintPos(0, 0);
-  gfx.printf("oCT4/%s ", to_string(mode_));
+  gfx.printf("oCT4/%s", to_string(mode_));
+
+  auto core_freq = static_cast<float>(SystemCore::current_core_freq()) / 1000.f;
+  gfx.setPrintPos(128 - 13 - 24, 0);
+  gfx.printf("%.1f", (double)core_freq);
+  gfx.writeBitmap8(128 - 13, 0, sizeof(unit_khz_8), unit_khz_8);
+
   gfx.drawHLinePattern(0, 10, gfx.kWidth, 2);
 
   switch (mode_) {
     case MODE_INFO: DrawInfo(gfx); break;
     case MODE_CORE: DrawCore(gfx); break;
+    case MODE_GFX: DrawGfx(gfx); break;
     case MODE_ADC: DrawADC(gfx); break;
     case MODE_TRx: DrawTRx(gfx); break;
     case MODE_DEBUG: DrawDebug(gfx); break;
@@ -112,7 +123,9 @@ void HWTestApp::DrawInfo(weegfx::Graphics &gfx) const
   gfx.printf("F_CPU=%luMHz", F_CPU / 1000LU / 1000LU);
   lines.nl();
 
-  gfx.printf("%s", strings::VERSION);
+  gfx.printf("%s", strings::BUILD_VERSION);
+  lines.nl();
+  gfx.printf("%s", strings::BUILD_TAG);
   lines.nl();
 
 #ifdef USB_SERIAL
@@ -147,6 +160,14 @@ void HWTestApp::DrawCore(weegfx::Graphics &gfx) const
 
   gfx.drawFrame(0, lines.y, 72, 8);
   gfx.drawRect(0, lines.y, static_cast<weegfx::coord_t>(load * 72.f + .5f), 8);
+}
+
+void HWTestApp::DrawGfx(weegfx::Graphics &gfx) const
+{
+  auto t = tick_ % 256;
+  weegfx::coord_t x = t < 128 ? 128 - t : t - 128;
+
+  gfx.invertRect(x - 8, 0, 16, gfx.kHeight);
 }
 
 void HWTestApp::DrawADC(weegfx::Graphics &gfx) const
@@ -201,24 +222,35 @@ void HWTestApp::DrawDebug(weegfx::Graphics &gfx) const
 }
 
 EVENT_DISPATCH_DEFAULT_DEFINE(HWTestApp){
-    {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_UP, &HWTestApp::evDisplayOn},
-    {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_DOWN, &HWTestApp::evDisplayOff},
+    {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_UP, &HWTestApp::evButtonUp},
+    {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_DOWN, &HWTestApp::evButtonDown},
+    {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_R, &HWTestApp::evButtonR},
     {UI::EVENT_ENCODER, UI::CONTROL_ENCODER_L, &HWTestApp::evEncoderL},
     {},
 };
 
-EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evDisplayOn)
+EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evButtonUp)
 {
   EVENT_DISPATCH_HANDLER_STUB();
 
-  SystemCore::display.driver().CmdDisplayOn(true);
+  display_on_ = !display_on_;
+  SystemCore::display.driver().CmdDisplayOn(display_on_);
 }
 
-EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evDisplayOff)
+EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evButtonDown)
+{
+  EVENT_DISPATCH_HANDLER_STUB();
+}
+
+EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evButtonR)
 {
   EVENT_DISPATCH_HANDLER_STUB();
 
-  SystemCore::display.driver().CmdDisplayOn(false);
+  auto freq = core_freq_ + 1;
+  if (freq >= SystemCore::CORE_FREQ_LAST) freq = 0;
+  core_freq_ = static_cast<SystemCore::CoreFreq>(freq);
+
+  SystemCore::Execute(this, core_freq_);
 }
 
 EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evEncoderL)
@@ -229,5 +261,4 @@ EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evEncoderL)
   if (m >= MODE_LAST) m = MODE_FIRST;
   mode_ = static_cast<Mode>(m);
 }
-
 }  // namespace oct4

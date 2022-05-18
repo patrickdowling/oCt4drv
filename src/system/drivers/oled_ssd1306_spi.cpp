@@ -33,7 +33,7 @@ FLASHMEM void OledSSD1306::Init(bool display_on)
 
   page_header_[0] = SSD1306::SET_HIGHER_COL_START_ADDRESS /*| (offset_ >> 4)*/;
   page_header_[1] = SSD1306::SET_LOWER_COL_START_ADDRESS | kDefaultOffset;
-  page_header_[2] = SSD1306::SET_PAGE_START_ADDRESS | current_page_;
+  page_header_[2] = SSD1306::SET_PAGE_START_ADDRESS | 0;
 
   command_buffer_[0] = display_on ? SSD1306::SET_DISPLAY_ON : SSD1306::SET_DISPLAY_OFF;
   command_buffer_[1] = SSD1306::SET_CONTRAST;
@@ -82,12 +82,15 @@ FLASHMEM void OledSSD1306::Init(bool display_on)
   }
 }
 
-void OledSSD1306::SetupFrame(const uint8_t *frame)
+void OledSSD1306::SetupFrame(const uint8_t *frame, TransferMode transfer_mode)
 {
-  // TODO inject commands here, use member array for page_write header
+  frame_data_ = frame;
+  transfer_pos_ = 0;
 
-  current_frame_ = frame;
-  current_page_ = 0;
+  switch (transfer_mode) {
+    case TRANSFER_MODE_PAGES: transfer_size_ = kPageSize; break;
+    case TRANSFER_MODE_SUBPAGES: transfer_size_ = kPageSize / 4; break;
+  };
 }
 
 void OledSSD1306::AsyncTransferBegin()
@@ -95,16 +98,23 @@ void OledSSD1306::AsyncTransferBegin()
   spi_.Flush();
   spi_.SetMode<SPI::PCS_DISABLE, 8>();
 
+  uint8_t page_index = transfer_pos_ / kPageSize;
+  uint8_t col_start = col_offset_ + (transfer_pos_ % kPageSize);
+
+  page_header_[0] = SSD1306::SET_HIGHER_COL_START_ADDRESS | (col_start >> 4);
+  page_header_[1] = SSD1306::SET_LOWER_COL_START_ADDRESS | (col_start & 0x0f);
+  page_header_[2] = SSD1306::SET_PAGE_START_ADDRESS | page_index;
+
   GPIO::OLED_CS::Clear();
   {
     ActiveLow<GPIO::OLED_DC> cmd_mode;
-    page_header_[2] = SSD1306::SET_PAGE_START_ADDRESS | current_page_;
 
-    if (!current_page_) spi_.Send(command_buffer_, kCommandBufferSize);
+    if (!transfer_pos_) { spi_.Send(command_buffer_, kCommandBufferSize); }
     spi_.Send(page_header_, kPageHeaderSize);
   }
 
-  spi_.AsyncTransferBegin(current_page_ptr(), kPageSize);
+  spi_.AsyncTransferBegin(frame_data_, transfer_size_);
+  transfer_pos_ += transfer_size_;
 }
 
 OledSSD1306::TransferStatus OledSSD1306::AsyncTransferWait()
@@ -112,19 +122,19 @@ OledSSD1306::TransferStatus OledSSD1306::AsyncTransferWait()
   spi_.AsyncTransferWait();
   GPIO::OLED_CS::Set();
 
-  if (current_page_ < kNumPages - 1) {
-    ++current_page_;
+  if (transfer_pos_ < kFrameSize) {
+    frame_data_ += transfer_size_;
     return TransferStatus::PAGE_COMPLETE;
   } else {
-    current_frame_ = nullptr;
-    current_page_ = 0;
+    frame_data_ = nullptr;
     return TransferStatus::FRAME_COMPLETE;
   }
 }
 
 void OledSSD1306::AdjustOffset(uint8_t offset)
 {
-  page_header_[1] = SSD1306::SET_LOWER_COL_START_ADDRESS | (offset & 0x0f);
+  col_offset_ = offset & 0x0f;
+  // page_header_[1] = SSD1306::SET_LOWER_COL_START_ADDRESS | (offset & 0x0f);
 }
 
 void OledSSD1306::CmdDisplayOn(bool on)

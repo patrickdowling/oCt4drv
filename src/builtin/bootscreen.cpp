@@ -63,7 +63,8 @@ void Bootscreen::Draw(weegfx::Graphics &gfx) const
   gfx.drawRect(0, 56, ticks_ / 8, 8);
 
   gfx.drawStr(8, 8, strings::NAME);
-  gfx.drawStr(9, 16, strings::VERSION);
+  gfx.drawStr(8, 16, strings::BUILD_VERSION);
+  gfx.drawStr(8, 24, strings::BUILD_TAG);
 }
 
 }  // namespace oct4

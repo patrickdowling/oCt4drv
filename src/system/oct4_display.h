@@ -34,6 +34,12 @@ public:
   Display(driver_type &driver, uint8_t *buffer) : driver_{driver}, frame_buffer_{buffer} {}
   DELETE_COPY_ASSIGN(Display);
 
+  void enable_subpages(bool enable)
+  {
+    transfer_mode_ =
+        enable ? driver_type::TRANSFER_MODE_SUBPAGES : driver_type::TRANSFER_MODE_PAGES;
+  }
+
   inline void Flush()
   {
     if (driver_.frame_valid() &&
@@ -51,7 +57,7 @@ public:
       // gets out of sync here.
       auto buffer = frame_buffer_.readable_frame();
       if (buffer) {
-        driver_.SetupFrame(buffer);
+        driver_.SetupFrame(buffer, transfer_mode_);
         driver_.AsyncTransferBegin();
       }
     }
@@ -88,6 +94,7 @@ public:
 private:
   driver_type &driver_;
   FrameBuffer frame_buffer_;
+  typename driver_type::TransferMode transfer_mode_ = driver_type::TRANSFER_MODE_PAGES;
 
   void EndFrame(const Frame *frame)
   {

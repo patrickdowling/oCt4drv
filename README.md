@@ -45,12 +45,18 @@ Most of the driver details are implemented directly and not through existing lib
 - One option might be to use `LittleFS` but this gets deleted when uploading code... so not that helpful. There are some workarounds I have in mind but nothing ready.
 - SD card would be the obvious choice but a) T4.1 won’t fit on all boards and b) it’s not standard on T4.0 without soldering.
 
+## Bonus
+- [x] The core update frequency can be switched between 16.7 and 32KHz (press right encoder in test menu). Still not convinced this is _useful_ (e.g. for audio, given the asymetric outputs) but it works.
+  * This breaks the screen transfers into smaller chunks (instead of 8 pages, 32).
+  * The ADC sampling times/averaging have been adjusted. This doesn't improve the results ;)
+  * The base load increases somewhat, since we're transmitting the 3 byte header somewhat more often to the screen.
+
 ## To-do
 - The frequency counter hasn’t been implemented. This should work using either the `QTIMER` for capture (on all four TRx even) or possibly one of the other timers via `XBAR` (since the alternate functions don't map directly the used GPIOs).
-- Break the screen transfers into configurable chunks. This would allow running the core ISR faster (e.g. 32KHz) although there would be more tearing (and that might sacrifice ADC sample quality). Also the platform is (IMO) simply not suited to audio.
 - Evaluate ADC. I'm adding an extended debug menu for this.
-- Also there are two ADCs we can use, and there’s probably a more streamlined scan approach (`QTIMER`->`ADC_HCn`).
+- Also there are two ADCs we can use, and there’s probably a more streamlined scan approach (`QTIMER=>ADC_HCn`).
 - Filtering on the TRx inputs (`FILT_CNT` and `FILT_PER`).
+- Check phase on encoders.
 
 ## General/Hardware
 - Given "When running at 600 MHz, Teensy 4.0 consumes approximately 100 mA current. Reducing CPU speed to 528 MHz or lower reduces power consumption." I’ve set the frequency to 480MHz. That's still 4x faster at least.

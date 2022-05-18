@@ -20,13 +20,8 @@ namespace oct4 {
 namespace strings {
 
 const char* const NAME = "oCT4";
-const char* const VERSION =
-#ifdef OCT4_BUILD_TAG
-    OCT4_BUILD_TAG
-#else
-    "unknown"
-#endif
-    ;
+const char* const BUILD_VERSION = OCT4_BUILD_VERSION;
+const char* const BUILD_TAG = OCT4_BUILD_TAG;
 
 }  // namespace strings
 }  // namespace oct4

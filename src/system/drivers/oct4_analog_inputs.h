@@ -33,7 +33,11 @@ public:
   static constexpr size_t kNumChannels = 4;
   using ValueType = std::array<uint16_t, kNumChannels>;
 
-  void Init();
+  enum AdcMode { ADC_MODE_NORMAL, ADC_MODE_FAST, ADC_MODE_LAST };
+
+  void Init(AdcMode adc_mode);
+
+  void ChangeMode(AdcMode adc_mode);
 
   void StartConversion();
 

@@ -28,14 +28,14 @@ FLASHMEM void setup()
   DEBUG_CRASH_REPORT();
 
   using namespace oct4;
-  SERIAL_DEBUG("%s %s", strings::NAME, strings::VERSION);
+  SERIAL_DEBUG("%s %s %s", strings::NAME, strings::BUILD_VERSION, strings::BUILD_TAG);
   SERIAL_DEBUG("Initializing...");
 
   api::Processor::PrintRegistry();
   api::Menu::PrintRegistry();
 
   SystemCore::Init();
-  SystemCore::StartInterrupts(SystemCore::MODE_OC16KHZ);
+  SystemCore::StartInterrupts(SystemCore::CORE_FREQ_OC16Khz);
 
   // This is a crutch. There should porbably be an "AppManager" or an "ActivityManager" or
   // Patch/State/Window/workbench/Thingy or even a framework.

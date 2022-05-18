@@ -25,15 +25,6 @@
 namespace oct4 {
 namespace drivers {
 
-static constexpr ADC_REFERENCE kAdcReference = ADC_REFERENCE::REF_3V3;
-
-// These values seem to result in ca. 53us sample time (for 4 channels)
-// TODO verify
-static constexpr uint8_t kAdcAveraging = 8;
-static constexpr uint8_t kAdcResolution = 12;
-static constexpr ADC_SAMPLING_SPEED kAdcSamplingSpeed = ADC_SAMPLING_SPEED::HIGH_SPEED;
-static constexpr ADC_CONVERSION_SPEED kAdcConversionSpeed = ADC_CONVERSION_SPEED::HIGH_SPEED;
-
 // This mimicks the method from T3.2 hardware that has a DMA channel that writes into the ADC
 // register, so it's basically a DMA-triggered software conversion. It's a bit awkward to use if we
 // want to use both ADCs because we now need 4 DMA channels but oh well.
@@ -47,6 +38,21 @@ static constexpr ADC_CONVERSION_SPEED kAdcConversionSpeed = ADC_CONVERSION_SPEED
 // If necessary we can use some faster settings, or both ADCs, and get more samples but then we'll
 // actually need a better way to measure (or calculate) the times to fit within the main loop.
 
+static constexpr ADC_REFERENCE kAdcReference = ADC_REFERENCE::REF_3V3;
+
+// TODO verify
+static constexpr struct {
+  uint8_t averaging;
+  uint8_t resolution;
+  ADC_SAMPLING_SPEED sampling_speed;
+  ADC_CONVERSION_SPEED conversion_speed;
+} kAdcParams[AnalogInputs::ADC_MODE_LAST] = {
+    // These values seem to result in ca. 53us sample time (for 4 channels)
+    {8, 12, ADC_SAMPLING_SPEED::HIGH_SPEED, ADC_CONVERSION_SPEED::HIGH_SPEED},
+    // Best guess
+    {4, 12, ADC_SAMPLING_SPEED::VERY_HIGH_SPEED, ADC_CONVERSION_SPEED::VERY_HIGH_SPEED},
+};
+
 static ADC adc;
 
 static constexpr size_t kNumSamples = AnalogInputs::kNumChannels;
@@ -58,16 +64,20 @@ static DMAMEM_ALIGN32 uint16_t adc0_buffer_rx[kNumSamples];
 static DMAMEM_ALIGN32 uint16_t adc0_buffer_mux[AnalogInputs::kNumChannels];
 
 template <typename T>
-void Configure(T *adcn)
+void Configure(T *adcn, AnalogInputs::AdcMode adc_mode, bool first_time)
 {
-  SERIAL_DEBUG("resolution=%u averaging=%u", kAdcResolution, kAdcAveraging);
-  adcn->setReference(kAdcReference);
-  adcn->setResolution(kAdcResolution);
-  adcn->setAveraging(kAdcAveraging);
-  adcn->setConversionSpeed(kAdcConversionSpeed);
-  adcn->setSamplingSpeed(kAdcSamplingSpeed);
+  const auto params = kAdcParams[adc_mode];
+  SERIAL_DEBUG("resolution=%u averaging=%u conversion=%02x sampling=%02x", params.resolution,
+               params.averaging, (unsigned)params.conversion_speed,
+               (unsigned)params.sampling_speed);
+
+  if (first_time) adcn->setReference(kAdcReference);
+
+  adcn->setResolution(params.resolution);
+  adcn->setAveraging(params.averaging);
+  adcn->setConversionSpeed(params.conversion_speed);
+  adcn->setSamplingSpeed(params.sampling_speed);
   adcn->recalibrate();
-  adcn->enableDMA();
 }
 
 // From cores/teensy4/analog.c
@@ -79,14 +89,15 @@ static constexpr uint16_t kPinChannelMap[] = {
     5,   // 19/A5  AD_B1_00
 };
 
-FLASHMEM void AnalogInputs::Init()
+FLASHMEM void AnalogInputs::Init(AdcMode adc_mode)
 {
   GPIO::CV1::Init();
   GPIO::CV2::Init();
   GPIO::CV3::Init();
   GPIO::CV4::Init();
 
-  Configure(adc.adc0);
+  Configure(adc.adc0, adc_mode, true);
+  adc.adc0->enableDMA();
 
   DEBUG_BUFFER("adc0_buffer_rx", adc0_buffer_rx, sizeof(adc0_buffer_rx));
   DEBUG_BUFFER("adc0_buffer_mux", adc0_buffer_mux, sizeof(adc0_buffer_mux));
@@ -116,7 +127,10 @@ FLASHMEM void AnalogInputs::Init()
   dma_channel_adc.enable();
 }
 
-unsigned count = 0;
+void AnalogInputs::ChangeMode(AdcMode adc_mode)
+{
+  Configure(adc.adc0, adc_mode, false);
+}
 
 FASTRUN void AnalogInputs::StartConversion()
 {

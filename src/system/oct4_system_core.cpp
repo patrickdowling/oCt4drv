@@ -22,6 +22,28 @@
 #include "system/t4.h"
 
 namespace oct4 {
+#define CORE_TIMER_PARAMS(freq, e, adc)                            \
+  {                                                                \
+    freq, (1000000UL / freq), e, drivers::AnalogInputs::adc, #freq \
+  }
+
+static constexpr struct {
+  unsigned freq;
+  unsigned period;
+  bool enable_subpages;
+  drivers::AnalogInputs::AdcMode adc_mode;
+  const char *const str;
+} kCoreTimerParams[SystemCore::CORE_FREQ_LAST] = {
+    CORE_TIMER_PARAMS(16666, false, ADC_MODE_NORMAL),
+    CORE_TIMER_PARAMS(32000, true, ADC_MODE_FAST),
+};
+
+static constexpr unsigned OC_UI_TIMER_PERIOD = 1000U;
+
+static constexpr uint32_t OCT4_SPI_CLOCK = 30'000'000;
+
+static constexpr uint8_t OC_CORE_TIMER_PRIO = 80;  // higher
+static constexpr uint8_t OC_UI_TIMER_PRIO = 128;   // default
 
 /*static*/
 DMAMEM_ALIGN32 uint8_t SystemCore::framebuffer[SystemCore::kFrameBufferSize];
@@ -44,6 +66,7 @@ static api::Processor::Inputs inputs;
 static api::Processor::Outputs outputs;
 
 static api::Processor *processor_ = nullptr;
+/*static*/ SystemCore::CoreFreq SystemCore::core_freq_ = SystemCore::CORE_FREQ_LAST;
 static api::Menu *menu_ = nullptr;
 
 static void FASTRUN ui_interrupt_handler()
@@ -83,7 +106,7 @@ FLASHMEM void SystemCore::Init()
   drivers.spi.Init(OCT4_SPI_CLOCK);
   drivers.dac8565.Init();
   drivers.oled_ssd1306.Init(false);
-  drivers.analog_inputs.Init();
+  drivers.analog_inputs.Init(drivers::AnalogInputs::ADC_MODE_NORMAL);
   drivers.digital_inputs.Init();
 
   controls.Init();
@@ -95,6 +118,11 @@ FLASHMEM void SystemCore::Init()
   processor_ = api::Processor::GetInstance("NULL"_4CC);
   if (!processor_) SERIAL_ERROR("PROC/NULL not found!");
 
+  tempmon_Start();  // ?
+}
+
+FLASHMEM void SystemCore::StartInterrupts(CoreFreq core_freq)
+{
   // Ensure there's a valid frame and the first SPI transfer is started
   DISPLAY_BEGIN_FRAME(true);
   DISPLAY_END_FRAME();
@@ -103,17 +131,30 @@ FLASHMEM void SystemCore::Init()
   drivers.analog_inputs.StartConversion();
   delay(1);
 
-  tempmon_Start();  // ?
-}
-
-FLASHMEM void SystemCore::StartInterrupts(Mode mode)
-{
-  (void)mode;
-
-  ui_interrupt_timer.begin(ui_interrupt_handler, OC_UI_TIMER_RATE);
+  ui_interrupt_timer.begin(ui_interrupt_handler, OC_UI_TIMER_PERIOD);
   ui_interrupt_timer.priority(OC_UI_TIMER_PRIO);
 
-  core_interrupt_timer.begin(core_interrupt_handler, OC_CORE_TIMER_RATE);
+  StartCoreInterupt(core_freq);
+}
+
+void SystemCore::StopCoreInterrupt()
+{
+  // FIXME This is pretty brute force. Really we might want to wait for
+  // - display frame to complete. This is 480us for 8 pages or x4 for subpage mode
+  // - Other?
+  delay(4);
+  core_interrupt_timer.end();
+}
+
+void SystemCore::StartCoreInterupt(CoreFreq core_freq)
+{
+  const auto params = kCoreTimerParams[core_freq];
+
+  display.enable_subpages(params.enable_subpages);
+  drivers.analog_inputs.ChangeMode(params.adc_mode);
+  delay(1);
+
+  core_interrupt_timer.begin(core_interrupt_handler, params.period);
   core_interrupt_timer.priority(OC_CORE_TIMER_PRIO);
 }
 
@@ -122,7 +163,7 @@ FLASHMEM void SystemCore::MainLoop()
   auto menu = menu_;
 
   SystemCore::event_dispatcher.DispatchEvents(menu);
-  menu->Tick(); // Temporary
+  menu->Tick();  // Temporary
 
   DISPLAY_BEGIN_FRAME(true);
   menu->Draw(graphics);
@@ -142,14 +183,24 @@ void SystemCore::Execute(const util::FourCC menu_fourcc)
   }
 }
 
-void SystemCore::Execute(api::Processor *processor)
+void SystemCore::Execute(api::Processor *processor, CoreFreq core_freq)
 {
   if (!processor) processor = api::Processor::GetInstance("NULL"_4CC);
 
-  if (processor_ != processor) {
-    SERIAL_DEBUG("PROC/%s %p", processor->processor_type().str().value, processor);
+  if (processor_ != processor || core_freq != core_freq_) {
+    SERIAL_DEBUG("PROC/%s %p timing=%s", processor->processor_type().str().value, processor,
+                 kCoreTimerParams[core_freq].str);
+
+    StopCoreInterrupt();
+    core_freq_ = core_freq;
     processor_ = processor;
+    StartCoreInterupt(core_freq);
   }
+}
+
+unsigned SystemCore::current_core_freq()
+{
+  return kCoreTimerParams[core_freq_].freq;
 }
 
 }  // namespace oct4

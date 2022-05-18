@@ -30,31 +30,22 @@
 
 namespace oct4 {
 
-static constexpr uint32_t OC_CORE_ISR_FREQ = 16666U;
-static constexpr uint32_t OC_CORE_TIMER_RATE = (1000000UL / OC_CORE_ISR_FREQ);
-static constexpr uint32_t OC_UI_TIMER_RATE = 1000UL;
-
-static constexpr uint32_t OCT4_SPI_CLOCK = 30'000'000;
-
-static constexpr uint8_t OC_CORE_TIMER_PRIO = 80;  // higher
-static constexpr uint8_t OC_UI_TIMER_PRIO = 128;   // default
-
 class SystemCore {
 public:
   SystemCore() = default;
   DELETE_COPY_ASSIGN(SystemCore);
 
-  enum Mode { MODE_OC16KHZ };
+  enum CoreFreq { CORE_FREQ_OC16Khz, CORE_FREQ_32KHz, CORE_FREQ_LAST };
 
   static void Init();
 
-  static void StartInterrupts(Mode mode);
+  static void StartInterrupts(CoreFreq core_freq);
 
   static void MainLoop();
 
   static void Execute(const util::FourCC menu_fourcc);
 
-  static void Execute(api::Processor *processor);
+  static void Execute(api::Processor *processor, CoreFreq core_freq);
 
   static struct Drivers {
     drivers::SPI spi;
@@ -76,11 +67,17 @@ public:
 
   static float read_temperature() { return tempmonGetTemp(); }
 
+  static unsigned current_core_freq();
+
 private:
   static constexpr size_t kFrameBufferSize = display_type::FrameBuffer::kBufferSize;
   static uint8_t framebuffer[kFrameBufferSize];
 
   static volatile uint32_t ticks_;
+  static CoreFreq core_freq_;
+
+  static void StopCoreInterrupt();
+  static void StartCoreInterupt(CoreFreq core_freq);
 };
 
 extern weegfx::Graphics graphics;

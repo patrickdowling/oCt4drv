@@ -21,7 +21,8 @@ namespace oct4 {
 namespace strings {
 
 extern const char* const NAME;
-extern const char* const VERSION;
+extern const char* const BUILD_VERSION;
+extern const char* const BUILD_TAG;
 
 }  // namespace strings
 

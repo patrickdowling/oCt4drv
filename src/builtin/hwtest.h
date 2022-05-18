@@ -19,6 +19,7 @@
 
 #include "api/api_menu.h"
 #include "api/api_processor.h"
+#include "system/oct4_system_core.h"
 #include "system/ui/ui_event_dispatcher.h"
 
 namespace oct4 {
@@ -42,6 +43,7 @@ public:
   enum Mode {
     MODE_INFO,
     MODE_CORE,
+    MODE_GFX,
     MODE_ADC,
     MODE_TRx,
     MODE_DEBUG,
@@ -55,15 +57,20 @@ protected:
 
   int dir_ = 1;
 
+  bool display_on_ = true;
+  SystemCore::CoreFreq core_freq_ = SystemCore::CORE_FREQ_OC16Khz;
+
   void DrawInfo(weegfx::Graphics &gfx) const;
   void DrawCore(weegfx::Graphics &gfx) const;
+  void DrawGfx(weegfx::Graphics &gfx) const;
   void DrawADC(weegfx::Graphics &gfx) const;
   void DrawTRx(weegfx::Graphics &gfx) const;
   void DrawDebug(weegfx::Graphics &gfx) const;
 
   EVENT_DISPATCH_DEFAULT();
-  EVENT_DISPATCH_DECLARE_HANDLER(evDisplayOn);
-  EVENT_DISPATCH_DECLARE_HANDLER(evDisplayOff);
+  EVENT_DISPATCH_DECLARE_HANDLER(evButtonUp);
+  EVENT_DISPATCH_DECLARE_HANDLER(evButtonDown);
+  EVENT_DISPATCH_DECLARE_HANDLER(evButtonR);
   EVENT_DISPATCH_DECLARE_HANDLER(evEncoderL);
 
   Processor::Inputs inputs_;

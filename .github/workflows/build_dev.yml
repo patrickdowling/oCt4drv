@@ -1,9 +1,10 @@
-name: PlatformIO CI
+name: Build dev firmware
 
 on:
   push:
     branches:
-      - main
+      - 'main'
+      - 'dev/*'
 
 jobs:
   build:
@@ -13,6 +14,11 @@ jobs:
     - uses: actions/checkout@v3
     - name: submodules
       run: git submodule update --init --recursive
+
+    - name: Setup env
+      run: |
+        echo "OCT4_BUILD_TAG=CI" >> $GITHUB_ENV
+        echo "OCT4_ARTIFACT_TAG=${GITHUB_REF##*/}-$(scripts/build_tag.sh)" >> $GITHUB_ENV
 
     - name: Cache PlatformIO
       uses: actions/cache@v2
@@ -31,8 +37,7 @@ jobs:
         pip3 install --upgrade pip
         pip3 install -r .github/workflows/requirements.txt
 
-
-    - name: Build firmware
+    - name: Compile firmware
       working-directory: .
       run: |
         pio run -e dev
@@ -41,5 +46,5 @@ jobs:
     - name: Copy artifact
       uses: actions/upload-artifact@v3
       with:
-        name: oct4-dev-${{github.sha}}
+        name: oct4-${{env.OCT4_ARTIFACT_TAG}}
         path: .pio/build/*/*.hex
