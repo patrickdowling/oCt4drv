@@ -16,8 +16,16 @@
 
 #include "hwtest.h"
 
-#include "resources/oct4_strings.h"
+#include <algorithm>
+
+#include "builtin/hwtest_adc.h"
+#include "builtin/hwtest_core.h"
+#include "builtin/hwtest_debug.h"
+#include "builtin/hwtest_gfx.h"
+#include "builtin/hwtest_info.h"
+#include "builtin/hwtest_trx.h"
 #include "system/oct4_system_core.h"
+#include "util/util_templates.h"
 
 namespace oct4 {
 
@@ -25,24 +33,14 @@ static HWTestApp instance;
 api::Menu::MenuRegistrar<HWTestApp> register_menu(&instance);
 api::Processor::ProcRegistrar<HWTestApp> register_proc(&instance);
 
-static constexpr const char *to_string(HWTestApp::Mode mode)
-{
-  switch (mode) {
-    case HWTestApp::MODE_INFO: return "INFO";
-    case HWTestApp::MODE_CORE: return "CORE";
-    case HWTestApp::MODE_GFX: return "GFX";
-    case HWTestApp::MODE_ADC: return "ADC";
-    case HWTestApp::MODE_TRx: return "TRx";
-    case HWTestApp::MODE_DEBUG: return "DEBUG";
-    case HWTestApp::MODE_LAST: break;
-  };
-  return "?";
-}
+// These could also use a registry, and eventually should only be allocated if the menu is active
+std::tuple<PluginInfo, PluginCore, PluginADC, PluginTRx, PluginGfx, PluginDebug> plugin_types;
+auto plugins_ = util::tuple_to_ptr_array<HWTestPlugin *>(plugin_types);
 
 void HWTestApp::Process(uint32_t ticks, const api::Processor::Inputs &inputs,
                         api::Processor::Outputs &outputs)
 {
-  inputs_ = inputs;
+  plugins_[plugin_index_]->Process(inputs);
 
   // Ramp
   outputs.dac[0] += 1;
@@ -69,156 +67,20 @@ void HWTestApp::HandleMenuEvent(api::MenuEvent menu_event)
   }
 }
 
+void HWTestApp::Tick()
+{
+  plugins_[plugin_index_]->Tick();
+}
+
 void HWTestApp::HandleEvent(const UI::Event &event)
 {
-  DEBUG_EVENT(HWTestApp, event);
+  // DEBUG_EVENT(HWTestApp, event);
   DispatchEvent(event);
 }
 
-static const uint8_t unit_khz_8[] = {0x00, 0x7c, 0x10, 0x68, 0x00, 0x7e, 0x08,
-                                     0x08, 0x7e, 0x00, 0x48, 0x68, 0x58};
-
 void HWTestApp::Draw(weegfx::Graphics &gfx) const
 {
-  gfx.setPrintPos(0, 0);
-  gfx.printf("oCT4/%s", to_string(mode_));
-
-  auto core_freq = static_cast<float>(SystemCore::current_core_freq()) / 1000.f;
-  gfx.setPrintPos(128 - 13 - 24, 0);
-  gfx.printf("%.1f", (double)core_freq);
-  gfx.writeBitmap8(128 - 13, 0, sizeof(unit_khz_8), unit_khz_8);
-
-  gfx.drawHLinePattern(0, 10, gfx.kWidth, 2);
-
-  switch (mode_) {
-    case MODE_INFO: DrawInfo(gfx); break;
-    case MODE_CORE: DrawCore(gfx); break;
-    case MODE_GFX: DrawGfx(gfx); break;
-    case MODE_ADC: DrawADC(gfx); break;
-    case MODE_TRx: DrawTRx(gfx); break;
-    case MODE_DEBUG: DrawDebug(gfx); break;
-    default: break;
-  }
-}
-
-struct PrintLines {
-  PrintLines(weegfx::Graphics &gfx) : gfx_{gfx} { gfx.setPrintPos(x, y); }
-
-  weegfx::coord_t x = 0;
-  weegfx::coord_t y = 16;
-
-  void nl()
-  {
-    y += 8;
-    gfx_.setPrintPos(x, y);
-  }
-
-  weegfx::Graphics &gfx_;
-};
-
-void HWTestApp::DrawInfo(weegfx::Graphics &gfx) const
-{
-  PrintLines lines{gfx};
-
-  gfx.printf("F_CPU=%luMHz", F_CPU / 1000LU / 1000LU);
-  lines.nl();
-
-  gfx.printf("%s", strings::BUILD_VERSION);
-  lines.nl();
-  gfx.printf("%s", strings::BUILD_TAG);
-  lines.nl();
-
-#ifdef USB_SERIAL
-  gfx.printf("USB_SERIAL");
-  lines.nl();
-#endif
-#ifdef OCT4_ENABLE_DEBUG
-  gfx.printf("OCT4_ENABLE_DEBUG");
-  lines.nl();
-#endif
-}
-
-void HWTestApp::DrawCore(weegfx::Graphics &gfx) const
-{
-  PrintLines lines{gfx};
-  gfx.printf("Temp            %.1fC", (double)SystemCore::read_temperature());
-  lines.nl();
-
-  auto core_isr_cycles = debug.perf.core_isr_cycles.value();
-  auto core_isr_period = debug.perf.core_isr_period.value();
-
-  gfx.printf("C %5lu       %6.2fu", core_isr_cycles,
-             (double)profiling::cycles_to_us(core_isr_cycles));
-  lines.nl();
-
-  gfx.printf("P %5lu       %6.2fu", core_isr_period,
-             (double)profiling::cycles_to_us(core_isr_period));
-  lines.nl();
-
-  auto load = static_cast<float>(core_isr_cycles) / static_cast<float>(core_isr_period);
-  gfx.printf("              %6.2f%%", (double)(load * 100.f));
-
-  gfx.drawFrame(0, lines.y, 72, 8);
-  gfx.drawRect(0, lines.y, static_cast<weegfx::coord_t>(load * 72.f + .5f), 8);
-}
-
-void HWTestApp::DrawGfx(weegfx::Graphics &gfx) const
-{
-  auto t = tick_ % 256;
-  weegfx::coord_t x = t < 128 ? 128 - t : t - 128;
-
-  gfx.invertRect(x - 8, 0, 16, gfx.kHeight);
-}
-
-void HWTestApp::DrawADC(weegfx::Graphics &gfx) const
-{
-  weegfx::coord_t x = 0;
-  int i = 0;
-  for (auto v : inputs_.analog_inputs) {
-    gfx.setPrintPos(x, 16);
-    gfx.printf("CV%d", i);
-
-    gfx.setPrintPos(x, 24);
-    gfx.printf("%04x", v);
-    gfx.setPrintPos(x, 32);
-    gfx.printf("%4u", v);
-
-    ++i;
-    x += 32;
-  }
-}
-
-void HWTestApp::DrawTRx(weegfx::Graphics &gfx) const
-{
-  weegfx::coord_t x = 0;
-  int i = 0;
-  for (auto di : inputs_.digital_inputs) {
-    gfx.setPrintPos(x, 16);
-    gfx.printf("TR%d", i);
-
-    gfx.setPrintPos(x, 24);
-    gfx.printf("%04x", di.raw);
-    gfx.setPrintPos(x, 32);
-    gfx.printf("%04x", di.flags);
-
-    ++i;
-    x += 32;
-  }
-}
-
-void HWTestApp::DrawDebug(weegfx::Graphics &gfx) const
-{
-  PrintLines lines{gfx};
-
-#ifdef OCT4_ENABLE_DEBUG
-  gfx.printf("ADC wait    %8lu", debug.drivers.adc_wait_count);
-  lines.nl();
-  gfx.printf("UI events   %8lu", debug.ui.event_count);
-  lines.nl();
-  gfx.printf("UI overflow %8lu", debug.ui.event_queue_overflow);
-#else
-  gfx.printf("[_] OCT4_ENABLE_DEBUG");
-#endif
+  plugins_[plugin_index_]->Draw(gfx);
 }
 
 EVENT_DISPATCH_DEFAULT_DEFINE(HWTestApp){
@@ -226,6 +88,7 @@ EVENT_DISPATCH_DEFAULT_DEFINE(HWTestApp){
     {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_DOWN, &HWTestApp::evButtonDown},
     {UI::EVENT_BUTTON_PRESS, UI::CONTROL_BUTTON_R, &HWTestApp::evButtonR},
     {UI::EVENT_ENCODER, UI::CONTROL_ENCODER_L, &HWTestApp::evEncoderL},
+    {UI::EVENT_ENCODER, UI::CONTROL_ENCODER_R, &HWTestApp::evEncoderR},
     {},
 };
 
@@ -257,8 +120,15 @@ EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evEncoderL)
 {
   EVENT_DISPATCH_HANDLER_STUB();
 
-  auto m = mode_ + 1;
-  if (m >= MODE_LAST) m = MODE_FIRST;
-  mode_ = static_cast<Mode>(m);
+  static constexpr int32_t num_modes = plugins_.size();
+
+  plugin_index_ = util::clamp(plugin_index_ + event_value, 0L, num_modes - 1);
 }
+
+EVENT_DISPATCH_DEFINE_HANDLER(HWTestApp, evEncoderR)
+{
+  EVENT_DISPATCH_HANDLER_STUB();
+  plugins_[plugin_index_]->evEncoderR(event_type, event_value);
+}
+
 }  // namespace oct4

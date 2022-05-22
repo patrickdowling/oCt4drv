@@ -47,7 +47,11 @@ private:
     TBase *instance = nullptr;
     FactoryFn factory = nullptr;
   };
-  using Registry = std::array<Entry, kNumEntries>;
+
+  struct Registry {
+    size_t registered = 0;
+    std::array<Entry, kNumEntries> entries;
+  };
 
   static Registry &get_registry();
 };

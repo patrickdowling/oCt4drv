@@ -31,12 +31,13 @@ void StaticTypeRegistry<TBase, num_entries>::Register(
     typename StaticTypeRegistry<TBase, num_entries>::FactoryFn factory_fn)
 {
   auto &registry = get_registry();
-  auto e = std::find_if(registry.begin(), registry.end(),
-                        [](const auto &entry) { return !entry.fourcc; });
-  if (e != registry.end()) {
-    e->fourcc = fourcc.value;
-    e->instance = instance;
-    e->factory = factory_fn;
+
+  if (registry.registered < num_entries) {
+    auto &e = registry.entries[registry.registered];
+    e.fourcc = fourcc.value;
+    e.instance = instance;
+    e.factory = factory_fn;
+    ++registry.registered;
   }
 }
 
@@ -44,17 +45,21 @@ template <typename TBase, size_t num_entries>
 TBase *StaticTypeRegistry<TBase, num_entries>::GetInstance(const FourCC fourcc)
 {
   const auto &registry = get_registry();
-  auto e = std::find_if(registry.begin(), registry.end(),
+
+  // OPTIMIZE We could actually sort the entries and search faster. Probably not a bottleneck though
+
+  auto end = registry.entries.begin() + registry.registered;
+  auto e = std::find_if(registry.entries.begin(), registry.entries.begin() + registry.registered,
                         [fourcc](const auto &entry) { return fourcc == entry.fourcc; });
 
-  return e != registry.end() ? e->instance : nullptr;
+  return e != end ? e->instance : nullptr;
 }
 
 template <typename TBase, size_t num_entries>
 void StaticTypeRegistry<TBase, num_entries>::PrintRegistry()
 {
   const auto &registry = get_registry();
-  for (auto &entry : registry)
+  for (auto &entry : registry.entries)
     PrintRegistryEntry({TBase::registry_fourcc}, {entry.fourcc}, entry.instance,
                        (const void *)entry.factory);
 }

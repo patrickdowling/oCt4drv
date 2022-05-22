@@ -19,6 +19,7 @@
 
 #include "api/api_menu.h"
 #include "api/api_processor.h"
+#include "builtin/hwtest_plugin.h"
 #include "system/oct4_system_core.h"
 #include "system/ui/ui_event_dispatcher.h"
 
@@ -36,44 +37,23 @@ public:
   // MENU
   util::FourCC menu_type() const final { return {fourcc}; }
   void HandleMenuEvent(api::MenuEvent menu_event) final;
-  void Tick() final { ++tick_; };
+  void Tick() final;
   void HandleEvent(const UI::Event &event) final;
   void Draw(weegfx::Graphics &gfx) const final;
 
-  enum Mode {
-    MODE_INFO,
-    MODE_CORE,
-    MODE_GFX,
-    MODE_ADC,
-    MODE_TRx,
-    MODE_DEBUG,
-    MODE_LAST,
-    MODE_FIRST = MODE_INFO
-  };
-
 protected:
-  Mode mode_ = MODE_FIRST;
-  uint32_t tick_ = 0;
+  int32_t plugin_index_ = 0;
 
   int dir_ = 1;
-
   bool display_on_ = true;
   SystemCore::CoreFreq core_freq_ = SystemCore::CORE_FREQ_OC16Khz;
-
-  void DrawInfo(weegfx::Graphics &gfx) const;
-  void DrawCore(weegfx::Graphics &gfx) const;
-  void DrawGfx(weegfx::Graphics &gfx) const;
-  void DrawADC(weegfx::Graphics &gfx) const;
-  void DrawTRx(weegfx::Graphics &gfx) const;
-  void DrawDebug(weegfx::Graphics &gfx) const;
 
   EVENT_DISPATCH_DEFAULT();
   EVENT_DISPATCH_DECLARE_HANDLER(evButtonUp);
   EVENT_DISPATCH_DECLARE_HANDLER(evButtonDown);
   EVENT_DISPATCH_DECLARE_HANDLER(evButtonR);
   EVENT_DISPATCH_DECLARE_HANDLER(evEncoderL);
-
-  Processor::Inputs inputs_;
+  EVENT_DISPATCH_DECLARE_HANDLER(evEncoderR);
 };
 
 }  // namespace oct4
