@@ -1,12 +1,24 @@
+**Update 09/2024**
+
+In the meantime, exciting things have happened:
+- [New hardware for T4.1](https://github.com/PaulStoffregen/O_C_T41) designed by PJRC Paul himself. Extra thanks for that!
+- [Phazerville Suite](https://github.com/djphazer/O_C-Phazerville) added support for Teensy 4.0 and the new 4.1 boards, with a better build process that includes the original apps. Good Stuff. Legacy code FTW :)
+
+So I've decided to archive this repository to free up some "but what if..." bandwidth.
+
+It was fun and spawned some [fledgling app development](https://github.com/djphazer/oCt4-Phazerville) but realistically I'm just not going to do anything with it in the forseeable future.
+
+---
+
 # o\_C and Teensy 4.0
 
 Just the drivers please, we're appless. Sans apps? Mit ohne apps?
 
 ## Allow myself to contradict... myself
-So far my position on using a Teensy 4.0 to update [O_C](https://github.com/patrickdowling/O_C) has been _meh, it should work, but needs some effort and I have no interest_.
+So far my position on using a Teensy 4.0 to update [O\_C](https://github.com/patrickdowling/O_C) has been _meh, it should work, but needs some effort and I have no interest_.
 The argument I made was along these lines:
 
-> Since it’s “just” a faster processor and more memory, that doesn’t solve the “single SPI shared by screen and DAC” bottleneck, so it doesn't really seem like that big a deal. The low-level drivers in `o_C` are fairly bare metal to enable driving the DAC/screen at a constant update rate, so those would need rewriting. Given the ad-hoc nature of the original “framework” (\*), jif one were to do that, replacing the framework would make sense. But that would mean porting all the apps, which is painful (\*\*) so no thanks.
+> Since it’s “just” a faster processor and more memory, that doesn’t solve the “single SPI shared by screen and DAC” bottleneck, so it doesn't really seem like that big a deal. The low-level drivers in `o_C` are fairly bare metal to enable driving the DAC/screen at a constant update rate, so those would need rewriting. Given the ad-hoc nature of the original “framework” (\*), if one were to do that, replacing the framework would make sense. But that would mean porting all the apps, which is painful (\*\*) so no thanks.
 
 There have been other attempts to shoehorn faster processors (T3.6, or my own [ocf4](https://github.com/patrickdowling/oCf4)) to replace the T3.2 but my theory is that without a plan to _use_ the ludicrous speed, they fizzled out. And once you actually upgrade to something with multiple SPI busses you might as well start fresh with a new design.
 
@@ -14,7 +26,7 @@ There have been other attempts to shoehorn faster processors (T3.6, or my own [o
 
 (\*) It’s a horrible interface that evolved while trying to maintain backwards compatibility to the existing apps at the time, while writing new drivers. So while it's low overhead, mistakes where perhaps made :)
 
-(\*\*) I know it’s painful because I refactored the framework twice already; the last ill-fated overhaul never made it to “production” but introduced an abstraction away from the ADC/DAC/TRx, as well as input/output labels and other fun things. It also fizzled out, because of the app rewrites necessary. Which is a shame because it would have made porting to T4.0 much easier.
+(\*\*) I know it’s painful because I refactored the framework twice already; the last ill-fated overhaul never made it to “production” but introduced an abstraction away from the ADC/DAC/TRx, as well as input/output labels and other fun things. It also fizzled out, because of the app rewrites necessary. Which is a shame because it would have made porting to T4.0 much easier. It is available [here](https://github.com/patrickdowling/O_C/tree/abandoned/refactoring).
 
 ## Where’s the apps?
 - Not in this repo. This is mainly a rewrite of the `o_C` hardware drivers on a Teensy 4.0, so most of the interfaces have changed. It's not "production ready" (e.g. there's no tests) nor complete. 
@@ -64,7 +76,7 @@ Most of the driver details are implemented directly and not through existing lib
 - While it seems like we *can* run the ADC to get 4 samples every 16.7KHz or more, that doesn't mean we should. The input conditioning will have an impact here (can be seen in practice with my [TU scope](https://github.com/patrickdowling/temps_utile-/wiki/APP:-silloscope)).
 - Builds using [platformio](https://platformio.org/). This seems to be a better compromise than the Arduino IDE. Also way easier for automated build.
   * In theory it allows for freezing the framework version so there's no need to drag along a copy of libraries (except, see next item).
-  * Unfortunately the brand-new platformio 6.0.0 seems to break the "build_src_flags only for project source" rule with explicit library versions :/
+  * Unfortunately the brand-new platformio 6.0.0 seems to break the "build\_src\_flags only for project source" rule with explicit library versions :/
   * The Teensy core and other libraries are full of warnings. These are generally trivial to fix but it doesn't look like the owners are really responsive to PRs and maintaining a yet-another-fork annoying; I may still end up submitting them.
   * In the mean time, the includes are wrapped with `#pragma` etc. to enable better warnings/errors for the rest of the code and not specifying a specific version.
 - Teensy 4.0 has a cache now. This means being careful around DMA and memory ordering.
